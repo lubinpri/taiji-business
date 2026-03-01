@@ -1,0 +1,9 @@
+com/dataplatform/talent/TalentManagementApplication.class
+com/dataplatform/talent/service/TalentService.class
+com/dataplatform/talent/model/TalentProfile.class
+com/dataplatform/talent/model/EnterpriseDemand.class
+com/dataplatform/talent/controller/DemandController.class
+com/dataplatform/talent/service/TalentServiceImpl.class
+com/dataplatform/talent/mapper/TalentProfileMapper.class
+com/dataplatform/talent/model/TalentSkillTag.class
+com/dataplatform/talent/controller/TalentController.class

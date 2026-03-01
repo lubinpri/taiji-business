@@ -1,0 +1,147 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: dbms-gateway
+
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 127.0.0.1:8848
+        namespace: dev
+        group: DBMS_GROUP
+      config:
+        server-addr: 127.0.0.1:8848
+        namespace: dev
+        group: DBMS_GROUP
+        file-extension: yml
+
+    gateway:
+      # 路由配置
+      routes:
+        # 认证服务
+        - id: dbms-auth
+          uri: lb://dbms-auth
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - StripPrefix=1
+
+        # 资源管理服务
+        - id: dbms-resource
+          uri: lb://dbms-resource
+          predicates:
+            - Path=/api/resource/**
+          filters:
+            - StripPrefix=1
+
+        # 权限管理服务
+        - id: dbms-permission
+          uri: lb://dbms-permission
+          predicates:
+            - Path=/api/permission/**
+          filters:
+            - StripPrefix=1
+
+        # 查询服务
+        - id: dbms-query
+          uri: lb://dbms-query
+          predicates:
+            - Path=/api/query/**
+          filters:
+            - StripPrefix=1
+
+        # 脱敏服务
+        - id: dbms-mask
+          uri: lb://dbms-mask
+          predicates:
+            - Path=/api/mask/**
+          filters:
+            - StripPrefix=1
+
+        # 审计服务
+        - id: dbms-audit
+          uri: lb://dbms-audit
+          predicates:
+            - Path=/api/audit/**
+          filters:
+            - StripPrefix=1
+
+        # 备份服务
+        - id: dbms-backup
+          uri: lb://dbms-backup
+          predicates:
+            - Path=/api/backup/**
+          filters:
+            - StripPrefix=1
+
+        # 水印服务
+        - id: dbms-watermark
+          uri: lb://dbms-watermark
+          predicates:
+            - Path=/api/watermark/**
+          filters:
+            - StripPrefix=1
+
+      # 全局过滤器
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+        - RequestLog
+
+      # 跨域配置
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origins: "*"
+            allowed-methods: "*"
+            allowed-headers: "*"
+            allow-credentials: false
+            max-age: 3600
+
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password:
+      database: 0
+      timeout: 3000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+
+# JWT配置
+jwt:
+  secret: dbms-platform-secret-key-must-be-at-least-256-bits-long-for-hs256
+  expiration: 86400000  # 24小时
+  header: Authorization
+  prefix: Bearer
+
+# 限流配置
+gateway:
+  rate-limit:
+    enabled: true
+    default-limit: 100  # 默认每秒请求数
+    default-replenish-rate: 10
+    default-burst-capacity: 20
+
+# 日志配置
+logging:
+  level:
+    com.dbms.gateway: INFO
+    org.springframework.cloud.gateway: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Actuator配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,gateway
+  endpoint:
+    health:
+      show-details: always

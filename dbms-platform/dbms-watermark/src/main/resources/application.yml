@@ -1,0 +1,37 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: dbms-watermark
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/dbms_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: root
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.dbms.watermark.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# Watermark configuration
+watermark:
+  enabled: true
+  default-type: TEXT  # TEXT, IMAGE, INVISIBLE
+  text:
+    font-family: SimSun
+    font-size: 12
+    color: "#888888"
+    alpha: 0.3
+  image:
+    path: classpath:/static/watermark.png
+    alpha: 0.2
+  invisible:
+    zero-width-encoding: true
+  pdf:
+    watermark-text: "Confidential - User: {userId} - Time: {timestamp}"
+    rotation: 45
+    font-size: 10

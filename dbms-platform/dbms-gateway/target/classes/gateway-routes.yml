@@ -1,0 +1,68 @@
+spring:
+  cloud:
+    gateway:
+      # 动态路由配置（可从Nacos配置中心刷新）
+      routes:
+        # 认证服务
+        - id: dbms-auth
+          uri: lb://dbms-auth
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - StripPrefix=1
+
+        # 资源管理服务
+        - id: dbms-resource
+          uri: lb://dbms-resource
+          predicates:
+            - Path=/api/resource/**
+          filters:
+            - StripPrefix=1
+
+        # 权限管理服务
+        - id: dbms-permission
+          uri: lb://dbms-permission
+          predicates:
+            - Path=/api/permission/**
+          filters:
+            - StripPrefix=1
+
+        # 查询服务
+        - id: dbms-query
+          uri: lb://dbms-query
+          predicates:
+            - Path=/api/query/**
+          filters:
+            - StripPrefix=1
+
+        # 脱敏服务
+        - id: dbms-mask
+          uri: lb://dbms-mask
+          predicates:
+            - Path=/api/mask/**
+          filters:
+            - StripPrefix=1
+
+        # 审计服务
+        - id: dbms-audit
+          uri: lb://dbms-audit
+          predicates:
+            - Path=/api/audit/**
+          filters:
+            - StripPrefix=1
+
+        # 备份服务
+        - id: dbms-backup
+          uri: lb://dbms-backup
+          predicates:
+            - Path=/api/backup/**
+          filters:
+            - StripPrefix=1
+
+        # 水印服务
+        - id: dbms-watermark
+          uri: lb://dbms-watermark
+          predicates:
+            - Path=/api/watermark/**
+          filters:
+            - StripPrefix=1

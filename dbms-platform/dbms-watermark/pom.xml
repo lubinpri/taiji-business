@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    
+    <parent>
+        <groupId>com.dbms</groupId>
+        <artifactId>dbms-platform</artifactId>
+        <version>1.0.0</version>
+    </parent>
+    
+    <artifactId>dbms-watermark</artifactId>
+    
+    <dependencies>
+        <!-- 依赖 dbms-common -->
+        <dependency>
+            <groupId>com.dbms</groupId>
+            <artifactId>dbms-common</artifactId>
+            <version>1.0.0</version>
+        </dependency>
+        
+        <!-- iText PDF 处理 -->
+        <dependency>
+            <groupId>com.itextpdf</groupId>
+            <artifactId>itext7-core</artifactId>
+            <version>7.2.5</version>
+            <type>pom</type>
+        </dependency>
+        
+        <!-- PDF 渲染 -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.1</version>
+        </dependency>
+        
+        <!-- Apache POI for Excel with Watermark -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.2.5</version>
+        </dependency>
+    </dependencies>
+</project>
