@@ -14,7 +14,7 @@ const LARGE = 500000
 
 export default function Page() {
   const [data, setData] = useState<Opp[]>([])
-  const [users, setUsers] = useState<Record<string,string>>({})
+  const [users, setUsers] = useState<User[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [stage, setStage] = useState('')
@@ -31,12 +31,13 @@ export default function Page() {
   const [msg, setMsg] = useState('')
   const [role, setRole] = useState('sales')
   const [tab, setTab] = useState<'info'|'follow'|'quote'>('info')
-  const [follows, setFollows] = useState<{id:string,method:string,content:string,next_date?:string,created_at:string}[]>([])
-  const [quotes, setQuotes] = useState<{id:string,amount:number,description?:string,created_at:string}[]>([])
+  const [follows, setFollows] = useState<{id:string,method:string,content:string,next_date?:string,created_at:string,attachment_url?:string}[]>([])
+  const [quotes, setQuotes] = useState<{id:string,amount:number,description?:string,created_at:string,file_url?:string}[]>([])
   const [showF, setShowF] = useState(false)
   const [showQ, setShowQ] = useState(false)
-  const [fData, setFData] = useState({ method: '电话', content: '', next: '' })
-  const [qData, setQData] = useState({ amount: 0, desc: '' })
+  const [fData, setFData] = useState({ method: '电话', content: '', next: '', file: null as File | null })
+  const [qData, setQData] = useState({ amount: 0, desc: '', file: null as File | null })
+  const [saving, setSaving] = useState(false)
 
   const canCreate = ['admin','sales_manager','sales'].includes(role)
   const canAll = ['admin','sales_manager'].includes(role)
@@ -48,14 +49,13 @@ export default function Page() {
   const loadUsers = async()=>{
     const r = await fetch(API_URL+'/rest/v1/users?select=id,name',{headers:{'apikey':API_KEY,'Authorization':'Bearer '+API_KEY}})
     const u = await r.json()
-    if(Array.isArray(u)){const m={};u.forEach((x:User)=>m[x.id]=x.name);setUsers(m)}
-    if(u?.length>0&&!newData.owner)setNewData(p=>({...p,owner:u[0].id}))
+    if(Array.isArray(u)){setUsers(u);if(u.length>0&&!newData.owner)setNewData(p=>({...p,owner:u[0].id}))}
   }
 
   const load = async()=>{
     setLoading(true)
     let url = API_URL+'/rest/v1/opportunities?select=*&order=created_at.desc'
-    if(search)url+=encodeURIComponent('&or=(name.ilike.*'+search+'*,customer_name.ilike.*'+search+'*)')
+    if(search)url+='&or=(name.ilike.*'+search+'*,customer_name.ilike.*'+search+'*)'
     if(stage)url+='&stage=eq.'+stage
     if(priority)url+='&priority=eq.'+priority
     url+='&offset='+((page-1)*pageSize)+'&limit='+pageSize
@@ -79,14 +79,20 @@ export default function Page() {
 
   const handleNew = async()=>{
     if(!newData.name||!newData.customer||!newData.owner){setMsg('请填必填');setTimeout(()=>setMsg(''),2000);return}
+    setSaving(true)
     const r = await fetch(API_URL+'/rest/v1/opportunities',{method:'POST',headers:{'apikey':API_KEY,'Authorization':'Bearer '+API_KEY,'Content-Type':'application/json'},body:JSON.stringify({name:newData.name,customer_name:newData.customer,amount:newData.amount,contact_person:newData.contact,priority:newData.priority,description:newData.desc,owner_id:newData.owner,stage:'潜在客户',is_large_confirmed:newData.amount>=LARGE})})
-    if(r.ok){setMsg('创建成功');setShowNew(false);setNewData({name:'',customer:'',amount:0,contact:'',priority:'中',desc:'',owner:Object.keys(users)[0]||''});load()}else{setMsg('创建失败');setTimeout(()=>setMsg(''),2000)}
+    if(r.ok){setMsg('创建成功');setShowNew(false);setNewData({name:'',customer:'',amount:0,contact:'',priority:'中',desc:'',owner:users[0]?.id||''});load()}
+    else{const e=await r.json();setMsg('创建失败:'+(e.message||''));setTimeout(()=>setMsg(''),3000)}
+    setSaving(false)
   }
 
   const handleSave = async()=>{
     if(!editData)return
+    setSaving(true)
     const r = await fetch(API_URL+'/rest/v1/opportunities?id=eq.'+editData.id,{method:'PATCH',headers:{'apikey':API_KEY,'Authorization':'Bearer '+API_KEY,'Content-Type':'application/json'},body:JSON.stringify({name:editData.name,customer_name:editData.customer_name,contact_person:editData.contact_person,amount:editData.amount,stage:editData.stage,priority:editData.priority,description:editData.description,is_large_confirmed:editData.is_large_confirmed,owner_id:editData.owner_id})})
-    if(r.ok){setMsg('保存成功');load();setEditMode(false);setSelected(editData)}else{setMsg('保存失败');setTimeout(()=>setMsg(''),2000)}
+    if(r.ok){setMsg('保存成功');load();setEditMode(false);setSelected(editData)}
+    else{setMsg('保存失败');setTimeout(()=>setMsg(''),2000)}
+    setSaving(false)
   }
 
   const handleDel = async()=>{
@@ -103,17 +109,23 @@ export default function Page() {
 
   const addFollow = async()=>{
     if(!selected||!fData.content)return
+    setSaving(true)
     const r = await fetch(API_URL+'/rest/v1/follow_ups',{method:'POST',headers:{'apikey':API_KEY,'Authorization':'Bearer '+API_KEY,'Content-Type':'application/json'},body:JSON.stringify({opportunity_id:selected.id,method:fData.method,content:fData.content,next_date:fData.next||null})})
-    if(r.ok){setMsg('添加成功');setShowF(false);setFData({method:'电话',content:'',next:''});loadDetail()}else{setMsg('添加失败');setTimeout(()=>setMsg(''),2000)}
+    if(r.ok){setMsg('添加成功');setShowF(false);setFData({method:'电话',content:'',next:'',file:null});loadDetail()}
+    else{setMsg('添加失败');setTimeout(()=>setMsg(''),2000)}
+    setSaving(false)
   }
 
   const addQuote = async()=>{
     if(!selected||!qData.amount)return
+    setSaving(true)
     const r = await fetch(API_URL+'/rest/v1/quotes',{method:'POST',headers:{'apikey':API_KEY,'Authorization':'Bearer '+API_KEY,'Content-Type':'application/json'},body:JSON.stringify({opportunity_id:selected.id,amount:qData.amount,description:qData.desc})})
-    if(r.ok){setMsg('添加成功');setShowQ(false);setQData({amount:0,desc:''});loadDetail()}else{setMsg('添加失败');setTimeout(()=>setMsg(''),2000)}
+    if(r.ok){setMsg('添加成功');setShowQ(false);setQData({amount:0,desc:'',file:null});loadDetail()}
+    else{setMsg('添加失败');setTimeout(()=>setMsg(''),2000)}
+    setSaving(false)
   }
 
-  const getU = (id:string)=>users[id]||'-'
+  const getU = (id:string)=>users.find(u=>u.id===id)?.name||'-'
   const clr = (s:string)=>({'潜在客户':'bg-gray-200','需求确认':'bg-blue-200','方案报价':'bg-yellow-200','商务谈判':'bg-orange-200','已签约':'bg-green-200','已失效':'bg-red-200'}[s]||'bg-gray-200')
   const fmt = (v:number)=>v?(v>=10000?(v/10000).toFixed(1)+'万':v.toString())+'元':'-'
   const fmtD = (d:string)=>d?new Date(d).toLocaleDateString('zh-CN'):'-'
@@ -127,7 +139,7 @@ export default function Page() {
         <h1 className="text-2xl font-bold">商机管理</h1>
         <div className="flex gap-2">
           {msg&&<div className="bg-green-100 text-green-800 px-4 py-2 rounded">{msg}</div>}
-          {canCreate&&<button onClick={()=>setShowNew(true)} className="px-4 py-2 bg-blue-600 text-white rounded">+ 新建</button>}
+          {canCreate&&users.length>0&&<button onClick={()=>setShowNew(true)} className="px-4 py-2 bg-blue-600 text-white rounded">+ 新建</button>}
           <select value={role} onChange={e=>setRole(e.target.value)} className="border px-3 py-2 rounded text-sm">
             <option value="admin">管理员</option><option value="sales_manager">销售经理</option><option value="sales">销售</option><option value="assistant">助理</option>
           </select>
@@ -168,13 +180,23 @@ export default function Page() {
         </div>
       </main>
 
-      {showNew&&<div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={()=>setShowNew(false)}><div className="bg-white rounded-lg shadow-xl max-w-xl w-full p-6" onClick={e=>e.stopPropagation()}>
+      {showNew&&(<div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={()=>!saving&&setShowNew(false)}><div className="bg-white rounded-lg shadow-xl max-w-xl w-full p-6" onClick={e=>e.stopPropagation()}>
         <div className="flex justify-between mb-4"><h2 className="text-xl font-bold">新建</h2><button onClick={()=>setShowNew(false)} className="text-2xl">&times;</button></div>
-        <div className="space-y-4"><div className="grid grid-cols-2 gap-4"><div><label className="text-sm">名称*</label><input value={newData.name} onChange={e=>setNewData({...newData,name:e.target.value})} className="w-full border px-3 py-2 rounded" /></div><div><label className="text-sm">客户*</label><input value={newData.customer} onChange={e=>setNewData({...newData,customer:e.target.value})} className="w-full border px-3 py-2 rounded" /></div><div><label className="text-sm">联系人</label><input value={newData.contact} onChange={e=>setNewData({...newData,contact:e.target.value})} className="w-full border px-3 py-2 rounded" /></div><div><label className="text-sm">金额*</label><input type="number" value={newData.amount} onChange={e=>setNewData({...newData,amount:parseInt(e.target.value)||0})} className="w-full border px-3 py-2 rounded" /></div><div><label className="text-sm">负责人*</label><select value={newData.owner} onChange={e=>setNewData({...newData,owner:e.target.value})} className="w-full border px-3 py-2 rounded">{Object.entries(users).map(([id,n])=><option key={id} value={id}>{n}</option>)}</select></div><div><label className="text-sm">优先级</label><select value={newData.priority} onChange={e=>setNewData({...newData,priority:e.target.value})} className="w-full border px-3 py-2 rounded">{PRIORITIES.map(p=><option key={p} value={p}>{p}</option>)}</select></div></div><div><label className="text-sm">描述</label><textarea value={newData.desc} onChange={e=>setNewData({...newData,desc:e.target.value})} className="w-full border px-3 py-2 rounded h-20" /></div></div>
-        <div className="mt-6 flex gap-2"><button onClick={handleNew} className="px-4 py-2 bg-blue-600 text-white rounded">创建</button><button onClick={()=>setShowNew(false)} className="px-4 py-2 bg-gray-200 rounded">取消</button></div>
-      </div></div>}
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div><label className="text-sm">名称*</label><input value={newData.name} onChange={e=>setNewData({...newData,name:e.target.value})} className="w-full border px-3 py-2 rounded" /></div>
+            <div><label className="text-sm">客户*</label><input value={newData.customer} onChange={e=>setNewData({...newData,customer:e.target.value})} className="w-full border px-3 py-2 rounded" /></div>
+            <div><label className="text-sm">联系人</label><input value={newData.contact} onChange={e=>setNewData({...newData,contact:e.target.value})} className="w-full border px-3 py-2 rounded" /></div>
+            <div><label className="text-sm">金额*</label><input type="number" value={newData.amount} onChange={e=>setNewData({...newData,amount:parseInt(e.target.value)||0})} className="w-full border px-3 py-2 rounded" /></div>
+            <div><label className="text-sm">负责人*</label><select value={newData.owner} onChange={e=>setNewData({...newData,owner:e.target.value})} className="w-full border px-3 py-2 rounded">{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select></div>
+            <div><label className="text-sm">优先级</label><select value={newData.priority} onChange={e=>setNewData({...newData,priority:e.target.value})} className="w-full border px-3 py-2 rounded">{PRIORITIES.map(p=><option key={p} value={p}>{p}</option>)}</select></div>
+          </div>
+          <div><label className="text-sm">描述</label><textarea value={newData.desc} onChange={e=>setNewData({...newData,desc:e.target.value})} className="w-full border px-3 py-2 rounded h-20" /></div>
+        </div>
+        <div className="mt-6 flex gap-2"><button onClick={handleNew} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">{saving?'提交中...':'创建'}</button><button onClick={()=>setShowNew(false)} disabled={saving} className="px-4 py-2 bg-gray-200 rounded">取消</button></div>
+      </div></div>)}
 
-      {selected&&!showNew&&!showTrans&&<div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={()=>setSelected(null)}><div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[85vh] overflow-auto" onClick={e=>e.stopPropagation()}>
+      {selected&&!showNew&&!showTrans&&(<div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50" onClick={()=>setSelected(null)}><div className="bg-white rounded-lg shadow-xl max-w-2xl w-full p-6 max-h-[85vh] overflow-auto" onClick={e=>e.stopPropagation()}>
         <div className="flex justify-between mb-4"><h2 className="text-xl font-bold">{editMode?'编辑':'详情'}</h2><button onClick={()=>setSelected(null)} className="text-2xl">&times;</button></div>
         <div className="flex border-b mb-4">
           <button onClick={()=>setTab('info')} className={'px-4 py-2 '+(tab==='info'?'border-b-2 border-blue-500 text-blue-600':'text-gray-500')}>基本信息</button>
@@ -182,22 +204,22 @@ export default function Page() {
           <button onClick={()=>setTab('quote')} className={'px-4 py-2 '+(tab==='quote'?'border-b-2 border-blue-500 text-blue-600':'text-gray-500')}>报价 {quotes.length>0&&<span className="ml-1 bg-blue-100 text-blue-600 text-xs px-1 rounded">{quotes.length}</span>}</button>
         </div>
 
-        {tab==='info'&&(<>{editMode&&editData?(<div className="space-y-4"><div className="grid grid-cols-2 gap-4"><div><label className="text-sm">名称</label><input value={editData.name} onChange={e=>setEditData({...editData,name:e.target.value})} className="w-full border px-3 py-2 rounded" /></div><div><label className="text-sm">客户</label><input value={editData.customer_name} onChange={e=>setEditData({...editData,customer_name:e.target.value})} className="w-full border px-3 py-2 rounded" /></div><div><label className="text-sm">联系人</label><input value={editData.contact_person||''} onChange={e=>setEditData({...editData,contact_person:e.target.value})} className="w-full border px-3 py-2 rounded" /></div><div><label className="text-sm">金额</label><input type="number" value={editData.amount} onChange={e=>setEditData({...editData,amount:parseInt(e.target.value)||0})} className="w-full border px-3 py-2 rounded" /></div><div><label className="text-sm">阶段</label><select value={editData.stage} onChange={e=>setEditData({...editData,stage:e.target.value})} className="w-full border px-3 py-2 rounded">{STAGES.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="text-sm">优先级</label><select value={editData.priority||''} onChange={e=>setEditData({...editData,priority:e.target.value})} className="w-full border px-3 py-2 rounded">{PRIORITIES.map(p=><option key={p} value={p}>{p}</option>)}</select></div><div><label className="text-sm">负责人</label><select value={editData.owner_id} onChange={e=>setEditData({...editData,owner_id:e.target.value})} className="w-full border px-3 py-2 rounded">{Object.entries(users).map(([id,n])=><option key={id} value={id}>{n}</option>)}</select></div><div className="flex items-center"><label className="text-sm mr-2">已确认:</label><input type="checkbox" checked={editData.is_large_confirmed||false} onChange={e=>setEditData({...editData,is_large_confirmed:e.target.checked})} /></div></div><div><label className="text-sm">描述</label><textarea value={editData.description||''} onChange={e=>setEditData({...editData,description:e.target.value})} className="w-full border px-3 py-2 rounded h-20" /></div></div>):(<div className="grid grid-cols-2 gap-4"><div><div className="text-gray-500 text-sm">客户</div><div className="font-medium">{selected.customer_name}</div></div><div><div className="text-gray-500 text-sm">联系人</div><div className="font-medium">{selected.contact_person}</div></div><div><div className="text-gray-500 text-sm">金额</div><div className="font-medium text-lg text-green-600">{fmt(selected.amount)} {selected.is_large_confirmed&&<span className="text-xs text-red-500">已确认</span>}</div></div><div><div className="text-gray-500 text-sm">优先级</div><div className="font-medium">{selected.priority==='高'?'🔴高':selected.priority==='中'?'🟡中':'🟢低'}</div></div><div><div className="text-gray-500 text-sm">阶段</div><div className="font-medium"><span className={'px-2 py-1 rounded '+clr(selected.stage)}>{selected.stage}</span></div></div><div><div className="text-gray-500 text-sm">负责人</div><div className="font-medium">{getU(selected.owner_id)}</div></div><div className="col-span-2"><div className="text-gray-500 text-sm">描述</div><div className="font-medium">{selected.description||'-'}</div></div></div>)}</>)}
+        {tab==='info'&&(<>{editMode&&editData?(<div className="space-y-4"><div className="grid grid-cols-2 gap-4"><div><label className="text-sm">名称</label><input value={editData.name} onChange={e=>setEditData({...editData,name:e.target.value})} className="w-full border px-3 py-2 rounded" /></div><div><label className="text-sm">客户</label><input value={editData.customer_name} onChange={e=>setEditData({...editData,customer_name:e.target.value})} className="w-full border px-3 py-2 rounded" /></div><div><label className="text-sm">联系人</label><input value={editData.contact_person||''} onChange={e=>setEditData({...editData,contact_person:e.target.value})} className="w-full border px-3 py-2 rounded" /></div><div><label className="text-sm">金额</label><input type="number" value={editData.amount} onChange={e=>setEditData({...editData,amount:parseInt(e.target.value)||0})} className="w-full border px-3 py-2 rounded" /></div><div><label className="text-sm">阶段</label><select value={editData.stage} onChange={e=>setEditData({...editData,stage:e.target.value})} className="w-full border px-3 py-2 rounded">{STAGES.map(s=><option key={s} value={s}>{s}</option>)}</select></div><div><label className="text-sm">优先级</label><select value={editData.priority||''} onChange={e=>setEditData({...editData,priority:e.target.value})} className="w-full border px-3 py-2 rounded">{PRIORITIES.map(p=><option key={p} value={p}>{p}</option>)}</select></div><div><label className="text-sm">负责人</label><select value={editData.owner_id} onChange={e=>setEditData({...editData,owner_id:e.target.value})} className="w-full border px-3 py-2 rounded">{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select></div><div className="flex items-center"><label className="text-sm mr-2">已确认:</label><input type="checkbox" checked={editData.is_large_confirmed||false} onChange={e=>setEditData({...editData,is_large_confirmed:e.target.checked})} /></div></div><div><label className="text-sm">描述</label><textarea value={editData.description||''} onChange={e=>setEditData({...editData,description:e.target.value})} className="w-full border px-3 py-2 rounded h-20" /></div></div>):(<div className="grid grid-cols-2 gap-4"><div><div className="text-gray-500 text-sm">客户</div><div className="font-medium">{selected.customer_name}</div></div><div><div className="text-gray-500 text-sm">联系人</div><div className="font-medium">{selected.contact_person}</div></div><div><div className="text-gray-500 text-sm">金额</div><div className="font-medium text-lg text-green-600">{fmt(selected.amount)} {selected.is_large_confirmed&&<span className="text-xs text-red-500">已确认</span>}</div></div><div><div className="text-gray-500 text-sm">优先级</div><div className="font-medium">{selected.priority==='高'?'🔴高':selected.priority==='中'?'🟡中':'🟢低'}</div></div><div><div className="text-gray-500 text-sm">阶段</div><div className="font-medium"><span className={'px-2 py-1 rounded '+clr(selected.stage)}>{selected.stage}</span></div></div><div><div className="text-gray-500 text-sm">负责人</div><div className="font-medium">{getU(selected.owner_id)}</div></div><div className="col-span-2"><div className="text-gray-500 text-sm">描述</div><div className="font-medium">{selected.description||'-'}</div></div></div>)}</>)}
 
         {tab==='follow'&&(<div>{canCreate&&<button onClick={()=>setShowF(true)} className="mb-4 px-4 py-2 bg-blue-600 text-white rounded">+ 添加</button>}{follows.length===0?<div className="text-center text-gray-500 py-8">暂无</div>:<div className="space-y-3 max-h-64 overflow-auto">{follows.map(f=>(<div key={f.id} className="border rounded p-3"><div className="flex justify-between"><div><span className="bg-blue-100 text-blue-600 px-2 py-0.5 rounded text-xs">{f.method}</span> <span className="text-gray-500 text-sm">{fmtD(f.created_at)}</span></div>{f.next_date&&<span className="text-orange-500 text-sm">下次:{fmtD(f.next_date)}</span>}</div><div className="mt-2">{f.content}</div></div>))}</div>}</div>)}
 
-        {tab==='quote'&&(<div>{canCreate&&<button onClick={()=>setShowQ(true)} className="mb-4 px-4 py-2 bg-blue-600 text-white rounded">+ 添加</button>}{quotes.length===0?<div className="text-center text-gray-500 py-8">暂无</div>:<div className="space-y-3 max-h-64 overflow-auto">{quotes.map(q=>(<div key={q.id} className="border rounded p-3"><div className="text-lg font-bold text-green-600">{fmt(q.amount)}</div><div className="text-gray-500 text-sm">{fmtD(q.created_at)}</div>{q.description&&<div className="text-gray-600 mt-1">{q.description}</div>}</div>))}</div>}</div>)}
+        {tab==='quote'&&(<div>{canCreate&&<button onClick={()=>setShowQ(true)} className="mb-4 px-4 py-2 bg-blue-600 text-white rounded">+ 添加报价</button>}{quotes.length===0?<div className="text-center text-gray-500 py-8">暂无</div>:<div className="space-y-3 max-h-64 overflow-auto">{quotes.map(q=>(<div key={q.id} className="border rounded p-3"><div className="text-lg font-bold text-green-600">{fmt(q.amount)}</div><div className="text-gray-500 text-sm">{fmtD(q.created_at)}</div>{q.description&&<div className="text-gray-600 mt-1">{q.description}</div>}</div>))}</div>}</div>)}
 
         <div className="mt-6 flex gap-2 flex-wrap">
-          {editMode?(<><button onClick={handleSave} className="px-4 py-2 bg-blue-600 text-white rounded">保存</button><button onClick={()=>{setEditMode(false);setEditData(null)}} className="px-4 py-2 bg-gray-200 rounded">取消</button></>):(<><button onClick={()=>{setEditMode(true);setEditData({...selected})}} className="px-4 py-2 bg-blue-600 text-white rounded">编辑</button>{canAll&&<><button onClick={handleDel} className="px-4 py-2 bg-red-600 text-white rounded">删除</button><button onClick={()=>setShowTrans(true)} className="px-4 py-2 bg-green-600 text-white rounded">转派</button></>}<button onClick={()=>setSelected(null)} className="px-4 py-2 bg-gray-200 rounded">关闭</button></>)}
+          {editMode?(<><button onClick={handleSave} disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">{saving?'保存中...':'保存'}</button><button onClick={()=>{setEditMode(false);setEditData(null)}} className="px-4 py-2 bg-gray-200 rounded">取消</button></>):(<><button onClick={()=>{setEditMode(true);setEditData({...selected})}} className="px-4 py-2 bg-blue-600 text-white rounded">编辑</button>{canAll&&<><button onClick={handleDel} className="px-4 py-2 bg-red-600 text-white rounded">删除</button><button onClick={()=>setShowTrans(true)} className="px-4 py-2 bg-green-600 text-white rounded">转派</button></>}<button onClick={()=>setSelected(null)} className="px-4 py-2 bg-gray-200 rounded">关闭</button></>)}
         </div>
-      </div></div>}
+      </div></div>)}
 
-      {showTrans&&selected&&<div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"><div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full"><h3 className="text-xl font-bold mb-4">转派</h3><div className="mb-4"><label className="text-sm">新负责人</label><select value={transTo} onChange={e=>setTransTo(e.target.value)} className="w-full border px-3 py-2 rounded"><option value="">选择...</option>{Object.entries(users).filter(([id])=>id!==selected.owner_id).map(([id,n])=><option key={id} value={id}>{n}</option>)}</select></div><div className="flex gap-2"><button onClick={handleTrans} disabled={!transTo} className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-50">确认</button><button onClick={()=>{setShowTrans(false);setTransTo('')}} className="px-4 py-2 bg-gray-200 rounded">取消</button></div></div></div>}
+      {showTrans&&selected&&(<div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"><div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full"><h3 className="text-xl font-bold mb-4">转派</h3><div className="mb-4"><label className="text-sm">新负责人</label><select value={transTo} onChange={e=>setTransTo(e.target.value)} className="w-full border px-3 py-2 rounded"><option value="">选择...</option>{users.filter(u=>u.id!==selected.owner_id).map(u=><option key={u.id} value={u.id}>{u.name}</option>)}</select></div><div className="flex gap-2"><button onClick={handleTrans} disabled={!transTo} className="px-4 py-2 bg-green-600 text-white rounded disabled:opacity-50">确认</button><button onClick={()=>{setShowTrans(false);setTransTo('')}} className="px-4 py-2 bg-gray-200 rounded">取消</button></div></div></div>)}
 
-      {showF&&<div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"><div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full"><h3 className="text-xl font-bold mb-4">添加跟进</h3><div className="mb-4"><label className="text-sm">方式</label><select value={fData.method} onChange={e=>setFData({...fData,method:e.target.value})} className="w-full border px-3 py-2 rounded">{FOLLOW.map(m=><option key={m} value={m}>{m}</option>)}</select></div><div className="mb-4"><label className="text-sm">内容*</label><textarea value={fData.content} onChange={e=>setFData({...fData,content:e.target.value})} className="w-full border px-3 py-2 rounded h-20" /></div><div className="mb-4"><label className="text-sm">下次跟进</label><input type="date" value={fData.next} onChange={e=>setFData({...fData,next:e.target.value})} className="w-full border px-3 py-2 rounded" /></div><div className="flex gap-2"><button onClick={addFollow} disabled={!fData.content} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">添加</button><button onClick={()=>{setShowF(false);setFData({method:'电话',content:'',next:''})}} className="px-4 py-2 bg-gray-200 rounded">取消</button></div></div></div>}
+      {showF&&(<div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"><div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full"><h3 className="text-xl font-bold mb-4">添加跟进</h3><div className="mb-4"><label className="text-sm">方式</label><select value={fData.method} onChange={e=>setFData({...fData,method:e.target.value})} className="w-full border px-3 py-2 rounded">{FOLLOW.map(m=><option key={m} value={m}>{m}</option>)}</select></div><div className="mb-4"><label className="text-sm">内容*</label><textarea value={fData.content} onChange={e=>setFData({...fData,content:e.target.value})} className="w-full border px-3 py-2 rounded h-20" /></div><div className="mb-4"><label className="text-sm">下次跟进</label><input type="date" value={fData.next} onChange={e=>setFData({...fData,next:e.target.value})} className="w-full border px-3 py-2 rounded" /></div><div className="flex gap-2"><button onClick={addFollow} disabled={!fData.content||saving} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">{saving?'提交中':'添加'}</button><button onClick={()=>{setShowF(false);setFData({method:'电话',content:'',next:'',file:null})}} className="px-4 py-2 bg-gray-200 rounded">取消</button></div></div></div>)}
 
-      {showQ&&<div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"><div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full"><h3 className="text-xl font-bold mb-4">添加报价</h3><div className="mb-4"><label className="text-sm">金额*</label><input type="number" value={qData.amount} onChange={e=>setQData({...qData,amount:parseInt(e.target.value)||0})} className="w-full border px-3 py-2 rounded" /></div><div className="mb-4"><label className="text-sm">说明</label><textarea value={qData.desc} onChange={e=>setQData({...qData,desc:e.target.value})} className="w-full border px-3 py-2 rounded h-20" /></div><div className="flex gap-2"><button onClick={addQuote} disabled={!qData.amount} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">添加</button><button onClick={()=>{setShowQ(false);setQData({amount:0,desc:''})}} className="px-4 py-2 bg-gray-200 rounded">取消</button></div></div></div>}
+      {showQ&&(<div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"><div className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full"><h3 className="text-xl font-bold mb-4">添加报价</h3><div className="mb-4"><label className="text-sm">金额*</label><input type="number" value={qData.amount} onChange={e=>setQData({...qData,amount:parseInt(e.target.value)||0})} className="w-full border px-3 py-2 rounded" /></div><div className="mb-4"><label className="text-sm">说明</label><textarea value={qData.desc} onChange={e=>setQData({...qData,desc:e.target.value})} className="w-full border px-3 py-2 rounded h-20" /></div><div className="flex gap-2"><button onClick={addQuote} disabled={!qData.amount||saving} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">{saving?'提交中':'添加'}</button><button onClick={()=>{setShowQ(false);setQData({amount:0,desc:'',file:null})}} className="px-4 py-2 bg-gray-200 rounded">取消</button></div></div></div>)}
     </div>
   )
 }
